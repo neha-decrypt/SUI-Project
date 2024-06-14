@@ -1,0 +1,48 @@
+[package]
+name = "Closed Loop Token"
+version = "0.0.1"
+edition = "2024.beta"
+
+[[move.package]]
+name = "MoveStdlib"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/testnet", subdir = "crates/sui-framework/packages/move-stdlib" }
+
+[[move.package]]
+name = "Sui"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/testnet", subdir = "crates/sui-framework/packages/sui-framework" }
+
+dependencies = [
+  { name = "MoveStdlib" },
+]
+
+[move.toolchain-version]
+compiler-version = "1.25.3"
+edition = "2024.beta"
+flavor = "sui"
+
+[env]
+
+[env.testnet]
+chain-id = "4c78adac"
+original-published-id = "0xebfcc7756491e902ec05a2385e3c07bfdb969b996efe3c80eeff3e783298285c"
+latest-published-id = "0xebfcc7756491e902ec05a2385e3c07bfdb969b996efe3c80eeff3e783298285c"
+published-version = "1"
+
+[env.devnet]
+chain-id = "ddb98719"
+original-published-id = "0x9a840f863a1e9d8b9f0f0c56664b7ca3e62d225a798c27c071d13213507a9750"
+latest-published-id = "0x9a840f863a1e9d8b9f0f0c56664b7ca3e62d225a798c27c071d13213507a9750"
+published-version = "1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+examples = "0x0"
+
+[move]
+manifest_digest = "681D6AF02DB0883664F395D724B2EF80B5169A92C31B6B3E55234EB2D28CFCAB"
+deps_digest = "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082"
+dependencies = [
+  { name = "Sui" },
+]
