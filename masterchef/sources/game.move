@@ -11,6 +11,10 @@ module staking::staking {
     public struct CreateStakePoolEvent has copy, drop {
         staking_pool_id: object::ID,
     }
+
+    public struct RemoveStakerEvent has copy, drop {
+        user: address,
+    }
     
     public struct CreateStakeLockEvent has copy, drop {
         staking_lock_id: object::ID,
@@ -31,10 +35,16 @@ module staking::staking {
         amount: u64,
     }
     
+    public struct Staker has store, drop {
+        stake_balance: u64,
+        user: address
+    }
+
     public struct StakingPool<phantom T0> has store, key {
         id: object::UID,
         stake_balance: balance::Balance<T0>,
         stakers: bag::Bag,
+        users: vector<Staker>,
         total_vesomis: u64,
         total_reward: u64,
         unstake_times_for_fluxtime: u64,
@@ -84,6 +94,7 @@ module staking::staking {
             id                         : object::new(arg3), 
             stake_balance              : coin::into_balance<T0>(arg1), 
             stakers                    : bag::new(arg3), 
+            users                      : vector::empty<Staker>(),
             total_vesomis              : 0, 
             total_reward               : 0, 
             unstake_times_for_fluxtime : arg2,
@@ -148,6 +159,11 @@ module staking::staking {
         event::emit<CreateStakeLockEvent>(v5);
         vesomis::transfer(vesomis::mint(arg1, v3, arg5), arg5);
         bag::add<address, StakingLock>(&mut arg0.stakers, tx_context::sender(arg5), v4);
+        let staker = Staker {
+        stake_balance: v1,
+        user: tx_context::sender(arg5),
+        };
+        vector::push_back<Staker>(&mut arg0.users, staker);
     }
     
     public entry fun unstake<T0>(arg0: &mut StakingPool<T0>, arg1: &mut vesomis::Supply, arg2: vesomis::VeSomis, arg3: &clock::Clock, arg4: &mut tx_context::TxContext) {
@@ -181,7 +197,24 @@ module staking::staking {
             vesomis                     : _,
             last_distribution_timestamp : _,
         } = v0;
+
+        
+        
+        // Remove staker from the users vector
+        let len = vector::length<Staker>(&arg0.users);
+        let mut i = 0;
+        while (i < len) {
+            let staker = vector::borrow<Staker>(&arg0.users, i);
+            if (staker.user == tx_context::sender(arg4)) {
+                let staker_removed = vector::swap_remove<Staker>(&mut arg0.users, i);
+                let _consumed = staker_removed.stake_balance; // or any other field or use a function to consume it
+                event::emit<RemoveStakerEvent>(RemoveStakerEvent{user: staker_removed.user});
+                break
+            };
+            i = i + 1;
+        };
         object::delete(v6);
+        
     }
     
     public fun weeks(arg0: u256, arg1: u64) : (u64, u64) {
