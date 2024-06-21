@@ -170,6 +170,7 @@ module staking::staking {
         
         // Remove staker from the users vector
         let len = vector::length<Staker>(&arg0.users);
+        object::delete(v6);
         let mut i = 0;
         while (i < len) {
             let staker = vector::borrow<Staker>(&arg0.users, i);
@@ -181,7 +182,7 @@ module staking::staking {
             };
             i = i + 1;
         };
-        object::delete(v6);
+        
         
     }
     
@@ -192,4 +193,3 @@ module staking::staking {
     
     // decompiled from Move bytecode v6
 }
-
