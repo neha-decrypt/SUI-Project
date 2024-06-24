@@ -5,7 +5,7 @@ module staking::staking {
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::clock::{Self, Clock};
     use sui::balance::{Self, Balance};
-
+    
     public struct CreateStakePoolEvent has copy, drop {
         staking_pool_id: object::ID,
     }
@@ -37,7 +37,13 @@ module staking::staking {
         id: object::UID,
         stake_balance: balance::Balance<T0>,
         users: vector<Staker>,
-        total_reward: u64,
+        reward_percent: u64,
+        stats: Stats
+    }
+
+    public struct Stats has store, drop {
+        staked_balance: u64,
+        total_reward: u64
     }
     
     public struct AdminCap has key {
@@ -49,12 +55,16 @@ module staking::staking {
         transfer::transfer<AdminCap>(v0, tx_context::sender(arg0));
     }
 
-    public entry fun create_stake<T0>(arg0: &AdminCap, arg1: coin::Coin<T0>, arg3: &mut tx_context::TxContext) {
+    public entry fun create_stake<T0>(arg0: &AdminCap, arg1: coin::Coin<T0>, reward_percent: u64, arg3: &mut tx_context::TxContext) {
         let v0 = StakingPool<T0>{
             id                         : object::new(arg3), 
             stake_balance              : coin::into_balance<T0>(arg1), 
             users                      : vector::empty<Staker>(),
-            total_reward               : 0, 
+            reward_percent             : reward_percent , //1%
+            stats                      : Stats{
+                staked_balance:0,
+                total_reward:0
+            }
         };
         let v1 = CreateStakePoolEvent{staking_pool_id: object::uid_to_inner(&v0.id)};
         event::emit<CreateStakePoolEvent>(v1);
@@ -75,9 +85,8 @@ module staking::staking {
                 let current_timestamp = clock::timestamp_ms(clock);
                 let staking_duration_seconds = (current_timestamp - staker.last_withdraw_timestamp) / 1000;
 
-                // Calculate reward based on duration and rate
-                let reward_rate_per_second = 1; // 0.0001% per second as an integer factor
-                let pending_rewards = (staker.stake_balance * staking_duration_seconds * reward_rate_per_second) / 1_000_000; // Use integer math
+
+                let pending_rewards = (staker.stake_balance * staking_duration_seconds * arg0.reward_percent) / 100000; // Use integer math
 
                 return pending_rewards
             };
@@ -89,6 +98,7 @@ module staking::staking {
     }
 
     public entry fun claim_pending_rewards<T0>(arg0: &mut StakingPool<T0>, arg2: &Clock, arg3: &mut tx_context::TxContext) {
+        
         let rewards = get_pending_rewards(arg0, tx_context::sender(arg3), arg2);
         let reward_coins = coin::take<T0>(&mut arg0.stake_balance, rewards, arg3);
         transfer::public_transfer<coin::Coin<T0>>(reward_coins, tx_context::sender(arg3));
@@ -104,10 +114,12 @@ module staking::staking {
                 break
             };
             i = i + 1
-        }
+        };
+        let stats = &mut arg0.stats;
+        stats.total_reward = stats.total_reward + rewards;
     }
   
-    public entry fun stake<T0>(arg0: &mut StakingPool<T0>, arg2: coin::Coin<T0>, arg3: &clock::Clock, arg4: &mut tx_context::TxContext) {
+public entry fun stake<T0>(arg0: &mut StakingPool<T0>, arg2: coin::Coin<T0>, arg3: &clock::Clock, arg4: &mut tx_context::TxContext) {
     let v0 = coin::into_balance<T0>(arg2);
     let v1 = balance::value<T0>(&v0);
 
@@ -133,8 +145,7 @@ module staking::staking {
             let current_timestamp = clock::timestamp_ms(arg3);
             let staking_duration_seconds = (current_timestamp - staker.last_withdraw_timestamp) / 1000;
             // Calculate reward based on duration and rate
-            let reward_rate_per_second = 1; // 0.0001% per second as an integer factor
-            let pending_rewards = (staker.stake_balance * staking_duration_seconds * reward_rate_per_second) / 1_000_000; // Use integer math
+            let pending_rewards = (staker.stake_balance * staking_duration_seconds * arg0.reward_percent) / 100000; // Use integer math
             let reward_coins = coin::take<T0>(&mut arg0.stake_balance, pending_rewards, arg4);
             transfer::public_transfer<coin::Coin<T0>>(reward_coins, tx_context::sender(arg4));
             staker.reward_earned = staker.reward_earned + pending_rewards;
@@ -152,8 +163,9 @@ module staking::staking {
         };
         vector::push_back<Staker>(&mut arg0.users, staker);
     };
-
-    balance::join<T0>(&mut arg0.stake_balance, v0);
+        let stats = &mut arg0.stats;
+        stats.staked_balance = stats.staked_balance + v1;
+        balance::join<T0>(&mut arg0.stake_balance, v0);
 }
 
     
@@ -175,16 +187,21 @@ module staking::staking {
                 let v5 = WithdrawStakeEvent{
                     amount: staker.stake_balance,
                 };
+                let stats = &mut arg0.stats;
+                stats.staked_balance = stats.staked_balance - staker.stake_balance;
                 event::emit<WithdrawStakeEvent>(v5);
 
                 // Remove staker from the users vector
                 let staker_removed = vector::swap_remove<Staker>(&mut arg0.users, i);
                 let _consumed = staker_removed.stake_balance; // or any other field or use a function to consume it
+                
                 event::emit<RemoveStakerEvent>(RemoveStakerEvent{user: staker_removed.user});
                 break
             };
             i = i + 1
         };
+
+        
     }
 
     public entry fun withdraw_stake<T0>(arg0: &AdminCap, arg1: &mut StakingPool<T0>, arg2: &mut tx_context::TxContext) {
